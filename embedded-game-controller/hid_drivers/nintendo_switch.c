@@ -346,6 +346,7 @@ typedef void (*ns_usb_cmd_cb_t)(egc_input_device_t *device, const void *data, u1
 struct ns_private_data_t {
     ns_usb_cmd_cb_t usb_cmd_cb;
     s16 accel_divisor[3];
+    s16 accel_offset[3];
     s16 gyro_divisor[3];
     ns_stick_cal_t stick_cal_left[2];  /* index 0 is x */
     ns_stick_cal_t stick_cal_right[2]; /* index 0 is x */
@@ -489,9 +490,9 @@ static inline void ns_get_accel(const struct ns_private_data_t *priv,
     int weight = ARRAY_SIZE(report->imu_data);
     int divisor = 0;
     for (int i = 0; i < ARRAY_SIZE(report->imu_data); i++) {
-        x += (s16)le16toh(report->imu_data[i].accel_x) * weight;
-        y += (s16)le16toh(report->imu_data[i].accel_y) * weight;
-        z += (s16)le16toh(report->imu_data[i].accel_z) * weight;
+        x += ((s16)le16toh(report->imu_data[i].accel_x) - priv->accel_offset[0]) * weight;
+        y += ((s16)le16toh(report->imu_data[i].accel_y) - priv->accel_offset[1]) * weight;
+        z += ((s16)le16toh(report->imu_data[i].accel_z) - priv->accel_offset[2]) * weight;
         divisor += weight;
         weight--;
     }
@@ -697,6 +698,7 @@ static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
         priv->accel_divisor[i] = (imu_cal->accel_scale[i] - imu_cal->accel_offset[i]) *
                                  EGC_ACCELEROMETER_RES_PER_G / JC_DFLT_ACCEL_SCALE;
         priv->gyro_divisor[i] = imu_cal->gyro_scale[i] - imu_cal->gyro_offset[i];
+        priv->accel_offset[i] = imu_cal->accel_offset[i];
 
         /* this should never happen, but make sure we don't crash the driver */
         if (priv->accel_divisor[i] == 0)
