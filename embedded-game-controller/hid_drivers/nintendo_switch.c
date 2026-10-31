@@ -346,7 +346,7 @@ typedef void (*ns_usb_cmd_cb_t)(egc_input_device_t *device, const void *data, u1
 struct ns_private_data_t {
     ns_usb_cmd_cb_t usb_cmd_cb;
     s16 accel_divisor[3];
-    s16 accel_scale[3];
+    s16 accel_offset[3];
     s16 gyro_divisor[3];
     ns_stick_cal_t stick_cal_left[2];  /* index 0 is x */
     ns_stick_cal_t stick_cal_right[2]; /* index 0 is x */
@@ -499,9 +499,9 @@ static inline void ns_get_accel(const struct ns_private_data_t *priv,
     x /= divisor;
     y /= divisor;
     z /= divisor;
-    accel->z = x * priv->accel_scale[0] / priv->accel_divisor[0];
-    accel->x = y * priv->accel_scale[1] / priv->accel_divisor[1];
-    accel->y = z * priv->accel_scale[2] / priv->accel_divisor[2];
+    accel->z = (x - priv->accel_offset[0]) * EGC_ACCELEROMETER_RES_PER_G / priv->accel_divisor[0];
+    accel->x = (y - priv->accel_offset[1]) * EGC_ACCELEROMETER_RES_PER_G / priv->accel_divisor[1];
+    accel->y = (z - priv->accel_offset[2]) * EGC_ACCELEROMETER_RES_PER_G / priv->accel_divisor[2];
 }
 
 static bool parse_input_report_imu(egc_input_device_t *device, const ns_input_report_t *report,
@@ -695,8 +695,8 @@ static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
                                        const ns_joycon_imu_cal_t *imu_cal)
 {
     for (int i = 0; i < 3; i++) {
+        priv->accel_offset[i] = imu_cal->accel_offset[i];
         priv->accel_divisor[i] = imu_cal->accel_scale[i] - imu_cal->accel_offset[i];
-        priv->accel_scale[i] = imu_cal->accel_scale[i];
         priv->gyro_divisor[i] = imu_cal->gyro_scale[i] - imu_cal->gyro_offset[i];
         /* this should never happen, but make sure we don't crash the driver */
         if (priv->accel_divisor[i] == 0)
