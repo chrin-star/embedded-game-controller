@@ -490,9 +490,9 @@ static inline void ns_get_accel(const struct ns_private_data_t *priv,
     int weight = ARRAY_SIZE(report->imu_data);
     int divisor = 0;
     for (int i = 0; i < ARRAY_SIZE(report->imu_data); i++) {
-        x += ((s16)le16toh(report->imu_data[i].accel_x) * weight;
-        y += ((s16)le16toh(report->imu_data[i].accel_y) * weight;
-        z += ((s16)le16toh(report->imu_data[i].accel_z) * weight;
+        x += (s16)le16toh(report->imu_data[i].accel_x) * weight;
+        y += (s16)le16toh(report->imu_data[i].accel_y) * weight;
+        z += (s16)le16toh(report->imu_data[i].accel_z) * weight;
         divisor += weight;
         weight--;
     }
@@ -698,8 +698,6 @@ static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
         priv->accel_divisor[i] = imu_cal->accel_scale[i] - imu_cal->accel_offset[i]; 
         priv->accel_scale[i] = imu_cal->accel_scale[i];
         priv->gyro_divisor[i] = imu_cal->gyro_scale[i] - imu_cal->gyro_offset[i];
-        priv->accel_offset[i] = imu_cal->accel_offset[i];
-
         /* this should never happen, but make sure we don't crash the driver */
         if (priv->accel_divisor[i] == 0)
             priv->accel_divisor[i] = 1;
