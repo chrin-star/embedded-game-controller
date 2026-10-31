@@ -335,8 +335,8 @@ static const ns_coded_command_t s_initialization_commands[] = {
     /* Stick factory calibration data */
     { NS_CODED_CAL, { .cal = { JC_SPI_ADDR_STICK_CAL_LEFT_USR_MAGIC, 2 + JC_STICK_CAL_SIZE } } },
     { NS_CODED_CAL, { .cal = { JC_SPI_ADDR_STICK_CAL_RIGHT_USR_MAGIC, 2 + JC_STICK_CAL_SIZE } } },
-    { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_SET_REPORT_MODE, JC_INPUT_IMU_DATA, 1 } } },
     { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_ENABLE_IMU, 1, 1 } } },
+    { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_SET_REPORT_MODE, JC_INPUT_IMU_DATA, 1 } } },
     { NS_CODED_SUBCOMMAND, { .subcmd = { JC_SUBCMD_ENABLE_VIBRATION, 1, 1 } } },
 };
 #define NS_INITIALIZATION_COMPLETED (ARRAY_SIZE(s_initialization_commands))
@@ -671,24 +671,20 @@ void ns_active_step(egc_input_device_t *device)
     }
 }
 
-static int ns_init_step(egc_input_device_t *device);
-
-static void ns_copy_u16_from_le(void *dst, const void *src, size_t count)
-{
-    for (int i = 0; i < count; i++)
-        ((u16 *)dst)[i] = le16toh(((u16 *)src)[i]);
-}
-
 static void ns_init_step_next(egc_input_device_t *device)
 {
     struct ns_private_data_t *priv = PRIV(device);
+
     priv->init_state++;
     priv->step_attempts = 0;
-    /* Set a timeout so that if we didn't get a reply, we will retry
-     * running the same step */
-    u32 retry_time_us = 500 * 1000;
-    egc_device_driver_set_timer(device, retry_time_us, retry_time_us);
-    ns_init_step(device);
+
+    /* Match the Nintendo controller command interval. */
+    u32 delay_us = device->connection == EGC_CONNECTION_USB
+                       ? 20 * 1000
+                       : 60 * 1000;
+
+    /* Retry the current initialization step if no reply arrives. */
+    egc_device_driver_set_timer(device, delay_us, 500 * 1000);
 }
 
 static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
@@ -751,6 +747,28 @@ static void ns_init_step_reply(egc_input_device_t *device, const void *data, u16
     struct ns_private_data_t *priv = PRIV(device);
 
     const ns_coded_command_t *step = &s_initialization_commands[priv->init_state];
+    if (step->type == NS_CODED_SUBCOMMAND || step->type == NS_CODED_CAL) {
+    const ns_input_report_t *reply = data;
+    const u8 expected_id =
+        step->type == NS_CODED_CAL
+            ? JC_SUBCMD_SPI_FLASH_READ
+            : step->subcmd.op;
+
+    if (length < 15) {
+        EGC_WARN("Subcommand reply too short");
+        return;
+    }
+
+    if (!(reply->subcmd_reply.ack & 0x80) ||
+        reply->subcmd_reply.id != expected_id) {
+        EGC_WARN("Subcommand 0x%02x rejected: ack=0x%02x id=0x%02x",
+                 expected_id,
+                 reply->subcmd_reply.ack,
+                 reply->subcmd_reply.id);
+        return;
+    }
+    }
+    
     if (step->type == NS_CODED_CAL) {
         const ns_input_report_t *report = data;
 
@@ -908,10 +926,13 @@ static void ns_driver_ops_intr_event(egc_input_device_t *device, const void *dat
 static bool ns_driver_ops_timer(egc_input_device_t *device)
 {
     struct ns_private_data_t *priv = PRIV(device);
+
     if (priv->init_state < NS_INITIALIZATION_COMPLETED) {
         ns_init_step(device);
         return priv->step_attempts++ < 10;
     }
+
+    ns_active_step(device);
     return false;
 }
 
