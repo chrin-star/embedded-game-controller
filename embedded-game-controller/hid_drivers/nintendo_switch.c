@@ -695,7 +695,7 @@ static void ns_prepare_imu_calibration(struct ns_private_data_t *priv,
                                        const ns_joycon_imu_cal_t *imu_cal)
 {
     for (int i = 0; i < 3; i++) {
-        priv->accel_divisor[i] = imu_cal->accel_scale[i] - imu_cal->accel_offset[i]; 
+        priv->accel_divisor[i] = imu_cal->accel_scale[i] - imu_cal->accel_offset[i];
         priv->accel_scale[i] = imu_cal->accel_scale[i];
         priv->gyro_divisor[i] = imu_cal->gyro_scale[i] - imu_cal->gyro_offset[i];
         /* this should never happen, but make sure we don't crash the driver */
